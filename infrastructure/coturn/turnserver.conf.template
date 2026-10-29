@@ -1,0 +1,25 @@
+# coturn TURN server config — self-hosted TURN relay for WebRTC fallback.
+# ~15-20% of networks (symmetric NAT, corporate firewalls) cannot do P2P;
+# this relay ensures those connections still work.
+#
+# Expose via a second Cloudflare Tunnel (TCP mode) or a VPS.
+# Install: sudo apt install coturn  or  brew install coturn
+
+listening-port=3478
+tls-listening-port=5349
+
+# Replace with your public IP or domain
+realm=turn.yourdomain.com
+server-name=turn.yourdomain.com
+
+# Credentials (match what you configure in the Host Agent)
+user=dhurta:<STRONG_PASSWORD>
+
+# TLS (recommended for production)
+# cert=/etc/letsencrypt/live/turn.yourdomain.com/fullchain.pem
+# pkey=/etc/letsencrypt/live/turn.yourdomain.com/privkey.pem
+
+# Relay only — no auth bypass
+no-multicast-peers
+no-cli
+log-file=/var/log/coturn/turn.log
