@@ -15,11 +15,11 @@ public sealed class RateLimiterService : IDisposable
     }
 
     private readonly ConcurrentDictionary<BucketKey, Bucket> _buckets = new();
-    private readonly Timer _cleanupTimer;
+    private readonly System.Threading.Timer _cleanupTimer;
 
     public RateLimiterService()
     {
-        _cleanupTimer = new Timer(_ => Cleanup(), null,
+        _cleanupTimer = new System.Threading.Timer(_ => Cleanup(), null,
             TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
     }
 
