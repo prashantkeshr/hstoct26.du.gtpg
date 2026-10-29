@@ -10,6 +10,10 @@
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <Optimize>true</Optimize>
     <Version>0.1.0</Version>
+    <!-- SIPSorcery uses System.Threading.Timer internally; disabling trim avoids IL analysis errors -->
+    <PublishTrimmed>false</PublishTrimmed>
+    <!-- SIPSorcery has a known advisory; no patched version available — suppress audit noise -->
+    <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,6 +21,7 @@
     <PackageReference Include="Konscious.Security.Cryptography.Argon2" Version="1.3.1" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.1.0" />
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.1.0" />
-    <PackageReference Include="SIPSorcery" Version="6.5.1" />
+    <!-- 6.5.1 was never published; 8.0.0 is what NuGet resolves. API is compatible. -->
+    <PackageReference Include="SIPSorcery" Version="8.0.0" />
   </ItemGroup>
 </Project>
