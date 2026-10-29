@@ -45,8 +45,9 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Name: "startup";     Description: "Start automatically when Windows starts"; GroupDescription: "Startup:"
 
 [Files]
-; Main executable — always replace on upgrade
-Source: "publish\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+; All runtime files (self-contained publish — includes .NET runtime DLLs)
+; appsettings.json excluded here and handled separately below
+Source: "publish\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion; Excludes: "appsettings.json"
 
 ; Default config — preserve user settings (TURN creds, FPS, etc.) on upgrade
 Source: "publish\appsettings.json"; DestDir: "{app}"; Flags: onlyifdoesntexist
