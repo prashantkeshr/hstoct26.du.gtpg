@@ -66,7 +66,7 @@ public sealed class WebRtcSession : IDisposable
     /// Adds an ICE candidate received from the browser.
     public void AddIceCandidate(string candidate, string? sdpMid, int? sdpMLineIndex)
     {
-        _ = _pc.addIceCandidate(new RTCIceCandidateInit
+        _pc.addIceCandidate(new RTCIceCandidateInit
         {
             candidate = candidate,
             sdpMid = sdpMid ?? "0",
@@ -89,7 +89,7 @@ public sealed class WebRtcSession : IDisposable
             ServerMessage.IceCandidate(
                 candidate.candidate,
                 candidate.sdpMid ?? "0",
-                (int)(candidate.sdpMLineIndex ?? 0)));
+                (int)candidate.sdpMLineIndex));
     }
 
     private void OnDcOpen()
