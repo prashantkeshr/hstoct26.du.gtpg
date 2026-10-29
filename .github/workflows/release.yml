@@ -1,0 +1,66 @@
+name: Release
+
+# Triggered by: git tag v0.1.0 && git push origin v0.1.0
+# Tip: push to main first so the web deploy (deploy-web.yml) runs, then tag.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-installer:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish host agent (self-contained single file, win-x64)
+        shell: pwsh
+        run: |
+          dotnet publish host-agent/src/DhurtaHost/DhurtaHost.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:DebugType=none `
+            -p:DebugSymbols=false `
+            -o installer/publish
+
+      - name: Build installer with Inno Setup
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}".TrimStart('v')
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          }
+          & $iscc /DMyAppVersion=$ver installer\dhurta-host-setup.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Dhurta Host ${{ github.ref_name }}"
+          files: installer/dist/DhurtaHost-Setup-v*.exe
+          generate_release_notes: true
+          body: |
+            ## Installation
+
+            1. Download `DhurtaHost-Setup-v*.exe` and run it.
+            2. Start the installed **Dhurta Host** (tray icon appears).
+            3. Copy the Cloudflare Tunnel URL from the tray tooltip.
+            4. Open `https://prashantkeshr.github.io/dhurta-host/` in a browser, enter the tunnel URL, and sign in.
+
+            ## Requirements
+            - Windows 10 version 1903 (build 19041) or later, 64-bit
+            - No port forwarding required — Cloudflare Tunnel handles the connection
