@@ -13,34 +13,68 @@ public partial class Program
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+        Application.ThreadException += (_, e) => ShowFatalError(e.Exception);
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            if (e.ExceptionObject is Exception ex) ShowFatalError(ex);
+        };
 
-        var cts = new CancellationTokenSource();
+        try
+        {
+            var cts = new CancellationTokenSource();
 
-        var host = BuildWebHost(args);
+            var host = BuildWebHost(args);
 
-        host.Services.GetRequiredService<DatabaseService>().Initialize();
-        var auth = host.Services.GetRequiredService<AuthService>();
-        auth.Initialize();
-        host.Services.GetRequiredService<DeviceService>().Initialize();
+            host.Services.GetRequiredService<DatabaseService>().Initialize();
+            var auth = host.Services.GetRequiredService<AuthService>();
+            auth.Initialize();
+            host.Services.GetRequiredService<DeviceService>().Initialize();
 
-        var capture = host.Services.GetRequiredService<ScreenCaptureService>();
-        var config = host.Services.GetRequiredService<IConfiguration>();
-        capture.Configure(
-            fps: config.GetValue("Capture:Fps", 15),
-            jpegQuality: config.GetValue("Capture:JpegQuality", 70));
-        capture.Start();
+            var capture = host.Services.GetRequiredService<ScreenCaptureService>();
+            var config = host.Services.GetRequiredService<IConfiguration>();
+            capture.Configure(
+                fps: config.GetValue("Capture:Fps", 15),
+                jpegQuality: config.GetValue("Capture:JpegQuality", 70));
+            capture.Start();
 
-        var hostTask = host.StartAsync(cts.Token);
-        hostTask.GetAwaiter().GetResult();
+            host.StartAsync(cts.Token).GetAwaiter().GetResult();
 
-        host.Services.GetRequiredService<TunnelService>().Start();
+            host.Services.GetRequiredService<TunnelService>().Start();
 
-        Application.Run(new TrayApplicationContext(host, host.Services, cts));
+            Application.Run(new TrayApplicationContext(host, host.Services, cts));
 
-        cts.Cancel();
-        host.Services.GetRequiredService<ScreenCaptureService>().Stop();
-        host.Services.GetRequiredService<TunnelService>().Stop();
-        host.StopAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
+            cts.Cancel();
+            host.Services.GetRequiredService<ScreenCaptureService>().Stop();
+            host.Services.GetRequiredService<TunnelService>().Stop();
+            host.StopAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            ShowFatalError(ex);
+        }
+    }
+
+    static void ShowFatalError(Exception ex)
+    {
+        var logDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "DhurtaHost");
+        Directory.CreateDirectory(logDir);
+        var logPath = Path.Combine(logDir, "startup-error.log");
+        try
+        {
+            File.AppendAllText(logPath,
+                $"[{DateTime.Now:O}]{Environment.NewLine}{ex}{Environment.NewLine}{Environment.NewLine}");
+        }
+        catch { }
+
+        MessageBox.Show(
+            $"Dhurta Host failed to start:{Environment.NewLine}{Environment.NewLine}{ex.Message}" +
+            $"{Environment.NewLine}{Environment.NewLine}Full error log:{Environment.NewLine}{logPath}",
+            "Dhurta Host — Startup Error",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Error);
     }
 
     static IHost BuildWebHost(string[] args)
