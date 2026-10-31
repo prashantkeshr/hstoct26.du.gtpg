@@ -49,8 +49,8 @@ Name: "startup";     Description: "Start automatically when Windows starts"; Gro
 ; appsettings.json excluded here and handled separately below
 Source: "publish\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion; Excludes: "appsettings.json"
 
-; Default config — preserve user settings (TURN creds, FPS, etc.) on upgrade
-Source: "publish\appsettings.json"; DestDir: "{app}"; Flags: onlyifdoesntexist
+; Default config — always install fresh copy; user-modified values are in %AppData%
+Source: "publish\appsettings.json"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}";             Filename: "{app}\{#MyAppExeName}"
