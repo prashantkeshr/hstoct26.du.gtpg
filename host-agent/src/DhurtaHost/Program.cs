@@ -20,6 +20,19 @@ public partial class Program
             if (e.ExceptionObject is Exception ex) ShowFatalError(ex);
         };
 
+        // Enforce single instance — second launch shows tray hint and exits
+        using var mutex = new Mutex(true, "Global\\DhurtaHostSingleInstance", out bool isNewInstance);
+        if (!isNewInstance)
+        {
+            MessageBox.Show(
+                "Dhurta Host is already running." + Environment.NewLine +
+                "Look for its icon in the system tray (notification area, bottom-right of your taskbar).",
+                "Dhurta Host",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
         try
         {
             var cts = new CancellationTokenSource();
