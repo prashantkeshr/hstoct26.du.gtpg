@@ -1,8 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Unicode;
 using DhurtaHost.Models;
-using Konscious.Security.Cryptography;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -40,35 +38,28 @@ public sealed class AuthService
         };
     }
 
-    // ── Password hashing (Argon2id) ───────────────────────────────────────
+    // ── Password hashing (PBKDF2-SHA256, OWASP-recommended 600k iterations) ─
+
+    private const int Pbkdf2Iterations = 600_000;
 
     public string HashPassword(string password)
     {
         var salt = RandomNumberGenerator.GetBytes(16);
-        var hash = ComputeArgon2(Encoding.UTF8.GetBytes(password), salt);
-        return $"$argon2id${Convert.ToBase64String(salt)}${Convert.ToBase64String(hash)}";
+        var hash = Rfc2898DeriveBytes.Pbkdf2(
+            password, salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, outputLength: 32);
+        return $"$pbkdf2-sha256${Pbkdf2Iterations}${Convert.ToBase64String(salt)}${Convert.ToBase64String(hash)}";
     }
 
     public bool VerifyPassword(string password, string stored)
     {
         var parts = stored.Split('$');
-        if (parts.Length != 4 || parts[1] != "argon2id") return false;
-        var salt = Convert.FromBase64String(parts[2]);
-        var expectedHash = Convert.FromBase64String(parts[3]);
-        var actualHash = ComputeArgon2(Encoding.UTF8.GetBytes(password), salt);
+        if (parts.Length != 5 || parts[1] != "pbkdf2-sha256") return false;
+        if (!int.TryParse(parts[2], out var iterations)) return false;
+        var salt = Convert.FromBase64String(parts[3]);
+        var expectedHash = Convert.FromBase64String(parts[4]);
+        var actualHash = Rfc2898DeriveBytes.Pbkdf2(
+            password, salt, iterations, HashAlgorithmName.SHA256, outputLength: 32);
         return CryptographicOperations.FixedTimeEquals(actualHash, expectedHash);
-    }
-
-    private static byte[] ComputeArgon2(byte[] password, byte[] salt)
-    {
-        using var argon2 = new Argon2id(password)
-        {
-            Salt = salt,
-            DegreeOfParallelism = 1,
-            MemorySize = 65536,   // 64 MB
-            Iterations = 3
-        };
-        return argon2.GetBytes(32);
     }
 
     // ── Access keys ───────────────────────────────────────────────────────
@@ -138,7 +129,9 @@ public sealed class AuthService
         if (_tokenValidation is null) return null;
         try
         {
-            var handler = new JwtSecurityTokenHandler();
+            // MapInboundClaims = false preserves original JWT claim names (sub, jti, etc.)
+            // rather than remapping them to ClaimTypes.* URN strings.
+            var handler = new JwtSecurityTokenHandler { MapInboundClaims = false };
             return handler.ValidateToken(token, _tokenValidation, out _);
         }
         catch
