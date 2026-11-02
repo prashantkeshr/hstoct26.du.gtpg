@@ -102,6 +102,7 @@ public partial class Program
         builder.Services.AddSingleton<TunnelService>();
         builder.Services.AddSingleton<RateLimiterService>();
         builder.Services.AddSingleton<WebRtcService>();
+        builder.Services.AddSingleton<ClipboardService>();
         builder.Services.AddSingleton<WebSocketHandler>();
 
         builder.Services.AddCors();

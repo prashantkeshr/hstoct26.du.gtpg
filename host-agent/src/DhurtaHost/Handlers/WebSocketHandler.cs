@@ -19,6 +19,7 @@ public sealed class WebSocketHandler
     private readonly ScreenCaptureService _capture;
     private readonly InputService _input;
     private readonly WebRtcService _webRtc;
+    private readonly ClipboardService _clipboard;
     private readonly ILogger<WebSocketHandler> _log;
 
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, WebSocket>
@@ -27,7 +28,7 @@ public sealed class WebSocketHandler
     public WebSocketHandler(
         AuthService auth, DatabaseService db, RateLimiterService limiter,
         ScreenCaptureService capture, InputService input, WebRtcService webRtc,
-        ILogger<WebSocketHandler> log)
+        ClipboardService clipboard, ILogger<WebSocketHandler> log)
     {
         _auth = auth;
         _db = db;
@@ -35,6 +36,7 @@ public sealed class WebSocketHandler
         _capture = capture;
         _input = input;
         _webRtc = webRtc;
+        _clipboard = clipboard;
         _log = log;
     }
 
@@ -276,8 +278,16 @@ public sealed class WebSocketHandler
                 break;
 
             case ClientMessageType.ClipboardGet:
+            {
+                var text = await _clipboard.GetTextAsync();
+                if (text is not null)
+                    await SendTextAsync(ws, ServerMessage.ClipboardText(text), ct);
+                break;
+            }
+
             case ClientMessageType.ClipboardSet:
-                await SendTextAsync(ws, ServerMessage.Error("NOT_IMPLEMENTED", "Clipboard in Phase 5"), ct);
+                if (!string.IsNullOrEmpty(msg.Text))
+                    await _clipboard.SetTextAsync(msg.Text);
                 break;
 
             default:

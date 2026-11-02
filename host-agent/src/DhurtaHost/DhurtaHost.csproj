@@ -9,7 +9,7 @@
     <RootNamespace>DhurtaHost</RootNamespace>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <Optimize>true</Optimize>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <!-- SIPSorcery uses System.Threading.Timer internally; disabling trim avoids IL analysis errors -->
     <PublishTrimmed>false</PublishTrimmed>
     <!-- SIPSorcery has a known advisory; no patched version available — suppress audit noise -->

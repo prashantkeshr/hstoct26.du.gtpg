@@ -17,36 +17,52 @@ export default function Workspace() {
   const signalingRef = useRef<SignalingClient | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const pcRef = useRef<RTCPeerConnection | null>(null)
+  const stateRef = useRef<ConnectionState>('connecting')
 
   const [state, setState] = useState<ConnectionState>('connecting')
+  const setStateAndRef = useCallback((s: ConnectionState | ((prev: ConnectionState) => ConnectionState)) => {
+    setState((prev) => {
+      const next = typeof s === 'function' ? s(prev) : s
+      stateRef.current = next
+      return next
+    })
+  }, [])
   const [errorMsg, setErrorMsg] = useState('')
   const [showOverlay, setShowOverlay] = useState(true)
+  const [clipboardToast, setClipboardToast] = useState<string | null>(null)
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const setStatus = useConnectionStore((s) => s.setStatus)
   const setScreenDimensions = useConnectionStore((s) => s.setScreenDimensions)
+
+  const showToast = useCallback((msg: string) => {
+    setClipboardToast(msg)
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setClipboardToast(null), 2000)
+  }, [])
 
   const handleStateChange = useCallback(
     (wsState: 'connecting' | 'connected' | 'disconnected' | 'error') => {
       if (wsState === 'connecting') {
         // Close any stale WebRTC connection from a previous session/reconnect
         if (pcRef.current) { pcRef.current.close(); pcRef.current = null }
-        setState((prev) => prev === 'reconnecting' ? 'reconnecting' : 'connecting')
+        setStateAndRef((prev) => prev === 'reconnecting' ? 'reconnecting' : 'connecting')
         setStatus('connecting')
         setShowOverlay(true)
       } else if (wsState === 'connected') {
-        setState('auth')
+        setStateAndRef('auth')
       } else if (wsState === 'disconnected') {
         // Auto-reconnect is in flight — show reconnecting rather than "Session ended"
-        setState('reconnecting')
+        setStateAndRef('reconnecting')
         setStatus('connecting')
         setShowOverlay(true)
       } else if (wsState === 'error') {
-        setState('error')
+        setStateAndRef('error')
         setStatus('error')
         setErrorMsg('Could not reconnect. Check the host agent and your network.')
       }
     },
-    [setStatus]
+    [setStatus, setStateAndRef]
   )
 
   // Set up a WebRTC peer connection from the host's SDP offer.
@@ -100,7 +116,7 @@ export default function Workspace() {
   const handleMessage = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
       case ServerMessageType.AuthOk:
-        setState('auth')
+        setStateAndRef('auth')
         break
 
       case ServerMessageType.ScreenInfo: {
@@ -111,7 +127,7 @@ export default function Workspace() {
           canvasRef.current.width = w
           canvasRef.current.height = h
         }
-        setState('streaming')
+        setStateAndRef('streaming')
         setShowOverlay(false)
         break
       }
@@ -143,8 +159,15 @@ export default function Workspace() {
         }
         break
 
+      case ServerMessageType.ClipboardText:
+        if (msg.text) {
+          navigator.clipboard.writeText(msg.text).catch(() => {})
+          showToast('Copied from host')
+        }
+        break
+
       case ServerMessageType.AuthFail:
-        setState('error')
+        setStateAndRef('error')
         setErrorMsg('Authentication failed. Please sign in again.')
         break
 
@@ -152,7 +175,7 @@ export default function Workspace() {
         setErrorMsg(msg.message ?? 'An error occurred.')
         break
     }
-  }, [setScreenDimensions, initWebRtc])
+  }, [setScreenDimensions, initWebRtc, showToast, setStateAndRef])
 
   useEffect(() => {
     const ep = getEndpoint()
@@ -168,13 +191,27 @@ export default function Workspace() {
     signalingRef.current = sc
     sc.connect()
 
+    const onPaste = (e: ClipboardEvent) => {
+      const text = e.clipboardData?.getData('text/plain')
+      if (!text || !signalingRef.current) return
+      // Only forward paste when actively streaming (use ref to avoid effect re-runs)
+      if (stateRef.current === 'streaming') {
+        e.preventDefault()
+        signalingRef.current.send({ type: 'ClipboardSet', text })
+        showToast('Pasted to host')
+      }
+    }
+    window.addEventListener('paste', onPaste)
+
     return () => {
+      window.removeEventListener('paste', onPaste)
       sc.disconnect()
       signalingRef.current = null
       pcRef.current?.close()
       pcRef.current = null
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
     }
-  }, [navigate, handleMessage, handleStateChange, setStatus])
+  }, [navigate, handleMessage, handleStateChange, setStatus, showToast])
 
   // Forward pointer events
   const sendPointer = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -275,6 +312,13 @@ export default function Workspace() {
         </div>
       )}
 
+      {/* Clipboard toast */}
+      {clipboardToast && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-zinc-800 text-zinc-100 text-xs px-3 py-1.5 rounded-full shadow-lg pointer-events-none transition-opacity">
+          {clipboardToast}
+        </div>
+      )}
+
       {/* Top bar (streaming mode) */}
       {state === 'streaming' && (
         <div className="absolute top-0 inset-x-0 h-8 bg-black/40 backdrop-blur-sm flex items-center px-4 gap-4 opacity-0 hover:opacity-100 transition-opacity duration-200">
@@ -282,9 +326,16 @@ export default function Workspace() {
           <span className="status-dot bg-green-400" />
           <span className="text-xs text-zinc-400">Connected</span>
           <button
+            title="Copy text from host clipboard to your clipboard"
+            onClick={() => signalingRef.current?.send({ type: 'ClipboardGet' })}
+            className="text-xs text-zinc-400 hover:text-zinc-100 transition-colors"
+          >
+            Copy
+          </button>
+          <button
             onClick={() => {
               signalingRef.current?.disconnect()
-              setState('closed')
+              setStateAndRef('closed')
               navigate('/dashboard')
             }}
             className="text-xs text-zinc-400 hover:text-red-400 transition-colors ml-2"
